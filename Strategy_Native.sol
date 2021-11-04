@@ -40,9 +40,6 @@ contract Strategy_Native is Strategy {
         pid = _pid;
         isSingleVault = _isSingleVault;
         isAutoComp = false;
-        if (isSingleVault) {
-            earlyWithdrawDuration = 3 days;
-        }
 
         earnedToNATIVEPath = _earnedToNATIVEPath;
         earnedToToken0Path = _earnedToToken0Path;

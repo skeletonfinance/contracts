@@ -657,7 +657,7 @@ contract SKULL is ERC20, Ownable {
     mapping(address => bool) public minters;
 
     constructor(string memory _name, string memory _symbol) public ERC20(_name, _symbol) {
-        _mint(msg.sender, 10_420_000000_000000_000000);
+        _mint(msg.sender, 33_033_000000_000000_000000);
     }
 
     function mint(address _to, uint256 _amount) external {

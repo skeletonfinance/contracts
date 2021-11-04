@@ -47,16 +47,16 @@ abstract contract Strategy is Ownable, ReentrancyGuard, Pausable {
     uint256 public wantLockedTotal = 0;
     uint256 public sharesTotal = 0;
 
-    uint256 public controllerFee = 200;
+    uint256 public controllerFee = 300;
     uint256 public constant controllerFeeMax = 10000; // 100 = 1%
     uint256 public constant controllerFeeUL = 300;
 
-    uint256 public buyBackRate = 200;
+    uint256 public buyBackRate = 0;
     uint256 public constant buyBackRateMax = 10000; // 100 = 1%
     uint256 public constant buyBackRateUL = 800;
     address public constant buyBackAddress = 0x000000000000000000000000000000000000dEaD;
 
-    uint256 public vaultBuyBackRate = 200;
+    uint256 public vaultBuyBackRate = 100;
     uint256 public constant vaultBuyBackRateUL = 800;
     address public vaultBuyBackAddress;
     

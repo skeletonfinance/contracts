@@ -1412,6 +1412,10 @@ interface IStrategy {
     ) external;
 }
 
+interface Vault {
+    function deposit(address _userAddress, uint256 _wantAmt) external;
+}
+
 contract NativeFarm is Ownable, ReentrancyGuard {
     using SafeMath for uint256;
     using SafeERC20 for IERC20;
@@ -1443,17 +1447,17 @@ contract NativeFarm is Ownable, ReentrancyGuard {
     }
 
     // Token address
-    address public constant NATIVE = 0xDaB6FBE1c944dDD665b3Cf6167D08A2b8907EF79; // TODO
+    address public constant NATIVE = 0xDB5Ad0D8c8acE03609596165C748B6986ce79767;
     // Owner reward per block: 10% ==> 11.11%
     uint256 public constant ownerNATIVEReward = 1111;
-    // Native total supply: 1.690420 mil = 1690420e18
-    uint256 public constant NATIVEMaxSupply = 1690420e18;  // TODO
-    // Natives per block: (0.09648515981 - owner 10%)
-    uint256 public NATIVEPerBlock = 96485159810000000; // NATIVE tokens created per block  // TODO
+    // Native total supply: 6.647051 mil = 6647051e18
+    uint256 public constant NATIVEMaxSupply = 6647051e18;
+    // Natives per block: (0.1213871528 - owner 10%)
+    uint256 public NATIVEPerBlock = 121387152800000000; // NATIVE tokens created per block
     // Approx 15/7/2021
-    uint256 public constant startBlock = 20752561; // https://ftmscan.com/block/20752561  // TODO
+    uint256 public constant startBlock = 21037567; // https://ftmscan.com/block/21037567
 
-    uint256 public nativeHarvestVaultPid = 0;
+    address public nativeHarvestVaultAddress;
 
     PoolInfo[] public poolInfo; // Info of each pool.
     mapping(uint256 => mapping(address => UserInfo)) public userInfo; // Info of each user that stakes LP tokens.
@@ -1597,14 +1601,8 @@ contract NativeFarm is Ownable, ReentrancyGuard {
         PoolInfo storage pool = poolInfo[_pid];
         UserInfo storage user = userInfo[_pid][_userAddress];
 
-        uint256 wantAmt = _wantAmt;
-
         if (user.shares > 0) {
-            if (_pid != nativeHarvestVaultPid) {
-                _harvestNativeTokens(_userAddress, pool, user);
-            } else {
-                wantAmt += user.shares.mul(pool.accNATIVEPerShare).div(1e12).sub(user.rewardDebt);
-            }
+            _harvestNativeTokens(_userAddress, pool, user);
         }
 
         if (_wantAmt > 0) {
@@ -1614,9 +1612,9 @@ contract NativeFarm is Ownable, ReentrancyGuard {
                 _wantAmt
             );
 
-            pool.want.safeIncreaseAllowance(pool.strat, wantAmt);
+            pool.want.safeIncreaseAllowance(pool.strat, _wantAmt);
             uint256 sharesAdded =
-                IStrategy(poolInfo[_pid].strat).deposit(_userAddress, wantAmt);
+                IStrategy(poolInfo[_pid].strat).deposit(_userAddress, _wantAmt);
             user.shares = user.shares.add(sharesAdded);
         }
         user.rewardDebt = user.shares.mul(pool.accNATIVEPerShare).div(1e12);
@@ -1637,36 +1635,29 @@ contract NativeFarm is Ownable, ReentrancyGuard {
         require(user.shares > 0, "user.shares is 0");
         require(sharesTotal > 0, "sharesTotal is 0");
 
-        uint256 wantAmt = _wantAmt;
 
         // Harvest pending NATIVE
-        if (_pid != nativeHarvestVaultPid) {
-            _harvestNativeTokens(msg.sender, pool, user);
-        } else {
-            wantAmt += user.shares.mul(pool.accNATIVEPerShare).div(1e12).sub(user.rewardDebt);
-        }
+        _harvestNativeTokens(msg.sender, pool, user);
 
         // Withdraw want tokens
         uint256 amount = user.shares.mul(wantLockedTotal).div(sharesTotal);
         if (_wantAmt > amount) {
             _wantAmt = amount;
         }
-        if (wantAmt > 0) {
-            if (_wantAmt > 0) {
-                uint256 sharesRemoved =
-                    IStrategy(poolInfo[_pid].strat).withdraw(msg.sender, _wantAmt);
+        if (_wantAmt > 0) {
+            uint256 sharesRemoved =
+                IStrategy(poolInfo[_pid].strat).withdraw(msg.sender, _wantAmt);
 
-                if (sharesRemoved > user.shares)
-                    user.shares = 0;
-                else
-                    user.shares = user.shares.sub(sharesRemoved);
-            }
+            if (sharesRemoved > user.shares)
+                user.shares = 0;
+            else
+                user.shares = user.shares.sub(sharesRemoved);
 
             uint256 wantBal = IERC20(pool.want).balanceOf(address(this));
-            if (wantBal < wantAmt) {
-                wantAmt = wantBal;
+            if (wantBal < _wantAmt) {
+                _wantAmt = wantBal;
             }
-            pool.want.safeTransfer(address(msg.sender), wantAmt);
+            pool.want.safeTransfer(address(msg.sender), _wantAmt);
         }
         user.rewardDebt = user.shares.mul(pool.accNATIVEPerShare).div(1e12);
         emit Withdraw(msg.sender, _pid, _wantAmt);
@@ -1678,7 +1669,12 @@ contract NativeFarm is Ownable, ReentrancyGuard {
                 _user.rewardDebt
             );
         if (pending > 0) {
-            deposit(_userAddress, nativeHarvestVaultPid, pending);
+            if (address(_pool.want) == NATIVE) {
+                safeNATIVETransfer(_userAddress, pending);
+            } else {
+                IERC20(NATIVE).safeIncreaseAllowance(nativeHarvestVaultAddress, pending);
+                Vault(nativeHarvestVaultAddress).deposit(_userAddress, pending);
+            }
         }
     }
 
@@ -1722,9 +1718,8 @@ contract NativeFarm is Ownable, ReentrancyGuard {
         IERC20(_token).safeTransfer(msg.sender, _amount);
     }
 
-    function setNativeHarvestVaultPid(uint256 _pid) public onlyOwner {
-        require(_pid <= poolInfo.length, "pid too high");
-        nativeHarvestVaultPid = _pid;
+    function setNativeHarvestVaultAddress(address _address) public onlyOwner {
+        nativeHarvestVaultAddress = _address;
     }
 
     function setMintParameters(uint256 _NATIVEPerBlock) external onlyOwner {

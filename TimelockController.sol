@@ -85,7 +85,7 @@ contract TimelockController is AccessControl, ReentrancyGuard {
     uint256 public minDelay = 60; // seconds - to be increased in production
     uint256 public minDelayReduced = 30; // seconds - to be increased in production
 
-    address payable public devWalletAddress = 0x454169c82a4d75eb33778c4DeF6Dd0Fa6fcA9a9D; // deployer
+    address payable public devWalletAddress = 0xCEde8FdB3d9bE4FcC7Aa65a3ae37465C3aae7483; // deployer
     /**
      * @dev Emitted when a call is scheduled as part of operation `id`.
      */
